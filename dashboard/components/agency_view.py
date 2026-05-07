@@ -29,18 +29,15 @@ def render_agency_earnings(margin_df: pd.DataFrame, months: list[str]) -> None:
     df = margin_df[margin_df["month"].isin(months)].copy() if months else margin_df
 
     # ── KPI ──────────────────────────────────────────────────────────────
-    works    = float(df["works"].sum())
-    expenses = float(df["expenses"].sum())
-    margin   = float(df["margin"].sum())
-    margin_pct_v = (margin / works * 100) if works else 0.0
+    works     = float(df["works"].sum())
+    expenses  = float(df["expenses"].sum())
+    margin    = float(df["margin"].sum())
     n_clients = df["project"].nunique() if "project" in df.columns else 0
+    avg_check = works / n_clients if n_clients else 0.0
 
-    cols = st.columns(4)
-    cols[0].metric("Агентская комиссия (Works)", money(works))
-    cols[1].metric("Прямые расходы", money(expenses))
-    cols[2].metric("Маржа клиентов", money(margin),
-                   delta=pct(margin_pct_v))
-    cols[3].metric("Уникальных клиентов", n_clients)
+    cols = st.columns(2)
+    cols[0].metric("Маржа клиентов", money(margin))
+    cols[1].metric("Средний чек",    money(avg_check))
 
     st.divider()
 

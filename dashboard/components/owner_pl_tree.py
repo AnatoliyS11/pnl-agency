@@ -19,6 +19,20 @@ _SERVICES_GROUPS    = {"Сервисы"}
 
 EMPLOYER_TAX_RATE = 0.302  # insurance contributions paid by employer
 
+_RU_MONTH = {
+    "Январь": 1, "Февраль": 2, "Март": 3, "Апрель": 4,
+    "Май": 5, "Июнь": 6, "Июль": 7, "Август": 8,
+    "Сентябрь": 9, "Октябрь": 10, "Ноябрь": 11, "Декабрь": 12,
+}
+
+
+def _month_key(m: str) -> tuple:
+    parts = m.split()
+    try:
+        return (int(parts[1]), _RU_MONTH.get(parts[0], 0))
+    except (IndexError, ValueError):
+        return (0, 0)
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -83,7 +97,7 @@ body{margin:0;font-family:Inter,Arial,sans-serif;background:#fff;}
   border-top:2px solid #90CAF9;}
 .pl-pioneer .row-subtotal td{background:#E8F5E9;font-weight:600;}
 .pl-pioneer .row-data   td{background:#fff;}
-.pl-pioneer .row-sep    td{background:#f5f5f5;height:6px;padding:0;}
+.pl-pioneer .row-sep    td{background:#f5f5f5;height:12px;padding:0;}
 .pl-pioneer .row-note   td{background:#fafafa;color:#9E9E9E;
   font-style:italic;font-size:11px;}
 .pl-pioneer .i1{padding-left:32px!important;}
@@ -544,10 +558,11 @@ def render_owner_pl_tree(
     )
 
     # ── Build rows + hierarchy ───────────────────────────────────────────
-    rows = build_owner_pl_lines(pl_df, overhead_df, salary_df, margin_df, months, overhead_calc)
+    months_sorted = sorted(months, key=_month_key)  # chronological: old → new (left → right)
+    rows = build_owner_pl_lines(pl_df, overhead_df, salary_df, margin_df, months_sorted, overhead_calc)
     _assign_hierarchy(rows)
 
-    html = _html_table_collapsible(rows, months, init_level=init_level, interactive=True)
+    html = _html_table_collapsible(rows, months_sorted, init_level=init_level, interactive=True)
     visible_rows = sum(1 for r in rows
                        if not (r.get("indent", 0) > init_level and r["row_type"] != "sep"))
     height = min(50 + 32 * visible_rows + 80, 1400)

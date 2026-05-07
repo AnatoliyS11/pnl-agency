@@ -7,7 +7,9 @@ from dashboard.components.charts import (
     multi_metric_bar, overhead_breakdown_chart,
     expense_pie_chart, money, pct
 )
-from dashboard.components.owner_pl_tree import render_owner_pl_tree
+from dashboard.components.owner_pl_tree import (
+    render_owner_pl_tree, _oh_sum, _COMMERCIAL_GROUPS, _month_key,
+)
 from dashboard.components.detail_panel import render_detail_panel
 from dashboard.components.salary_editor import render_salary_editor
 from dashboard.components.refunds_view import render_refunds
@@ -110,25 +112,42 @@ def _render_summary_tab(
             return None
         return f"{(curr - prev) / abs(prev) * 100:+.1f}%".replace(".", ",")
 
+    rev         = float(focus_row.get("revenue", 1) or 1)
+    comm_oh     = _oh_sum(overhead_df, focus_month, _COMMERCIAL_GROUPS, overhead_calc)
+    comm_profit = float(focus_row["contribution_margin"]) - comm_oh
+    ops_profit  = float(focus_row["ebit"])
+    net_profit  = ops_profit * 0.80
+
+    prev_comm_profit = prev_ops_profit = prev_net_profit = None
+    if prev_row is not None:
+        prev_month      = prev_row["month"]
+        prev_comm_oh    = _oh_sum(overhead_df, prev_month, _COMMERCIAL_GROUPS, overhead_calc)
+        prev_comm_profit = float(prev_row["contribution_margin"]) - prev_comm_oh
+        prev_ops_profit  = float(prev_row["ebit"])
+        prev_net_profit  = prev_ops_profit * 0.80
+
     kcols = st.columns(4)
-    kcols[0].metric("Выручка", money(focus_row["revenue"]),
+    kcols[0].metric("Выручка",
+                    money(focus_row["revenue"]),
                     delta=_delta(focus_row["revenue"],
                                  prev_row["revenue"] if prev_row is not None else None))
-    kcols[1].metric("Валовая маржа", money(focus_row["gross_margin"]),
-                    delta=pct(focus_row["gross_margin_pct"]))
-    kcols[2].metric("Маржа вклада", money(focus_row["contribution_margin"]),
-                    delta=pct(focus_row["contribution_margin_pct"]))
-    kcols[3].metric("EBIT", money(focus_row["ebit"]),
-                    delta=pct(focus_row["ebit_pct"]))
+    kcols[1].metric("Коммерческая прибыль",
+                    money(comm_profit),
+                    delta=_delta(comm_profit, prev_comm_profit))
+    kcols[2].metric("Операционная прибыль",
+                    money(ops_profit),
+                    delta=_delta(ops_profit, prev_ops_profit))
+    kcols[3].metric("Чистая прибыль",
+                    money(net_profit),
+                    delta=_delta(net_profit, prev_net_profit))
 
-    ebit_val     = float(focus_row["ebit"])
-    ebit_pct_val = float(focus_row["ebit_pct"])
-    if ebit_val < 0:
-        st.error(f"{focus_month}: EBIT отрицательный ({money(ebit_val)}) — операционный убыток")
-    elif ebit_pct_val < 10:
-        st.warning(f"{focus_month}: рентабельность ниже 10%")
+    net_pct = net_profit / rev * 100
+    if net_profit < 0:
+        st.error(f"{focus_month}: чистая прибыль отрицательная ({money(net_profit)}) — убыток")
+    elif net_pct < 10:
+        st.warning(f"{focus_month}: рентабельность ниже 10% ({pct(net_pct)})")
     else:
-        st.success(f"{focus_month}: рентабельность в норме")
+        st.success(f"{focus_month}: рентабельность в норме ({pct(net_pct)})")
 
     st.divider()
 
@@ -290,7 +309,6 @@ def render(
         "📊 Сводный P&L",
         "🔍 Детализация",
         "👥 Зарплаты",
-        "↩️ Возвраты МП",
         "💼 Заработок агентства",
     ])
 
@@ -304,7 +322,4 @@ def render(
         render_salary_editor(salary_df, months)
 
     with tabs[3]:
-        render_refunds(refunds_df, months)
-
-    with tabs[4]:
         render_agency_earnings(margin_df, months)

@@ -36,8 +36,8 @@ def money(v, unit: str = " ₽") -> str:
     except (TypeError, ValueError):
         return str(v)
     sign = "-" if fv < 0 else ""
-    s = f"{abs(fv):,.2f}"                          # '1,234,567.89'
-    s = s.replace(",", "\u00a0").replace(".", ",").replace("\u00a0", " ")
+    s = f"{abs(fv):,.0f}"
+    s = s.replace(",", " ")
     return f"{sign}{s}{unit}"
 
 
@@ -52,7 +52,7 @@ def money_compact(v, unit: str = " ₽") -> str:
     sign = "-" if fv < 0 else ""
     av = abs(fv)
     if av >= 1_000_000:
-        s = f"{av/1_000_000:.2f}".replace(".", ",")
+        s = f"{av/1_000_000:.1f}".replace(".", ",")
         return f"{sign}{s} млн{unit}"
     return money(fv, unit)
 

@@ -59,9 +59,26 @@ _PANEL_STYLE = """
 """
 
 
-def _pivot_to_html(pivot: pd.DataFrame, months: list[str], total_label: str = "Итого") -> str:
-    """Render a pivot DataFrame as a styled HTML table with month columns + total row."""
-    cols = months + [total_label]
+_PCT_COL = "% изм."
+
+
+def _fmt_cell(col: str, v) -> str:
+    if col == _PCT_COL:
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            return "—"
+        if fv != fv:  # NaN
+            return "—"
+        sign = "+" if fv > 0 else ""
+        return f"{sign}{fv:.1f}%".replace(".", ",")
+    return money_compact(v)
+
+
+def _pivot_to_html(pivot: pd.DataFrame, months: list[str]) -> str:
+    """Render pivot as styled HTML table with month columns + % change (last vs first)."""
+    extra_cols = [c for c in pivot.columns if c not in months]
+    cols = months + extra_cols
     head = "".join(f"<th>{c}</th>" for c in cols)
     thead = f"<thead><tr><th>Статья</th>{head}</tr></thead>"
 
@@ -70,14 +87,26 @@ def _pivot_to_html(pivot: pd.DataFrame, months: list[str], total_label: str = "�
         cells = [f"<td>{label}</td>"]
         for c in cols:
             v = row.get(c, 0)
-            cells.append(f"<td>{money_compact(v)}</td>")
+            cells.append(f"<td>{_fmt_cell(c, v)}</td>")
         body.append("<tr>" + "".join(cells) + "</tr>")
 
-    # Total row
-    totals = pivot.sum(axis=0)
+    # Total row — sum month cols, recompute % for totals
+    totals = pivot[months].sum(axis=0)
     tcells = [f"<td>ВСЕГО</td>"]
     for c in cols:
-        tcells.append(f"<td>{money_compact(totals.get(c, 0))}</td>")
+        if c in months:
+            tcells.append(f"<td>{money_compact(totals.get(c, 0))}</td>")
+        elif c == _PCT_COL and len(months) >= 2:
+            first_v = totals.get(months[0], 0)
+            last_v  = totals.get(months[-1], 0)
+            if first_v:
+                pct_v = (last_v - first_v) / abs(first_v) * 100
+                sign = "+" if pct_v > 0 else ""
+                tcells.append(f"<td>{sign}{pct_v:.1f}%".replace(".", ",") + "</td>")
+            else:
+                tcells.append("<td>—</td>")
+        else:
+            tcells.append("<td>—</td>")
     body.append("<tr class='total'>" + "".join(tcells) + "</tr>")
 
     return f"{_PANEL_STYLE}<table class='dp-table'>{thead}<tbody>{''.join(body)}</tbody></table>"
@@ -85,7 +114,7 @@ def _pivot_to_html(pivot: pd.DataFrame, months: list[str], total_label: str = "�
 
 def _build_pivot(df: pd.DataFrame, group_col: str, value_col: str,
                  months: list[str]) -> pd.DataFrame:
-    """Group by group_col × month, return pivot with months as columns."""
+    """Group by group_col × month, return pivot with months + % change column."""
     df_m = df[df["month"].isin(months)] if "month" in df.columns else df
     if df_m.empty:
         return pd.DataFrame()
@@ -95,8 +124,13 @@ def _build_pivot(df: pd.DataFrame, group_col: str, value_col: str,
         .unstack("month")
         .reindex(columns=months, fill_value=0)
     )
-    pivot["Итого"] = pivot.sum(axis=1)
-    pivot = pivot.sort_values("Итого", ascending=False)
+    # % change: last month vs first month
+    if len(months) >= 2:
+        first_vals = pivot[months[0]].replace(0, float("nan"))
+        pivot[_PCT_COL] = ((pivot[months[-1]] - pivot[months[0]]) / first_vals.abs() * 100).round(1)
+    else:
+        pivot[_PCT_COL] = float("nan")
+    pivot = pivot.sort_values(months[-1] if months else _PCT_COL, ascending=False)
     return pivot
 
 
@@ -118,7 +152,11 @@ def _salary_structure_pivot(salary_df: pd.DataFrame, months: list[str]) -> pd.Da
         pd.DataFrame(rows).groupby(["k", "month"])["v"].sum()
         .unstack("month").reindex(columns=months, fill_value=0)
     )
-    pivot["Итого"] = pivot.sum(axis=1)
+    if len(months) >= 2:
+        first_vals = pivot[months[0]].replace(0, float("nan"))
+        pivot[_PCT_COL] = ((pivot[months[-1]] - pivot[months[0]]) / first_vals.abs() * 100).round(1)
+    else:
+        pivot[_PCT_COL] = float("nan")
     return pivot
 
 
@@ -139,8 +177,12 @@ def _salary_role_structure_pivot(salary_df: pd.DataFrame, months: list[str]) -> 
         pd.DataFrame(rows).groupby(["k", "month"])["v"].sum()
         .unstack("month").reindex(columns=months, fill_value=0)
     )
-    pivot["Итого"] = pivot.sum(axis=1)
-    return pivot.sort_values("Итого", ascending=False)
+    if len(months) >= 2:
+        first_vals = pivot[months[0]].replace(0, float("nan"))
+        pivot[_PCT_COL] = ((pivot[months[-1]] - pivot[months[0]]) / first_vals.abs() * 100).round(1)
+    else:
+        pivot[_PCT_COL] = float("nan")
+    return pivot.sort_values(months[-1] if months else _PCT_COL, ascending=False)
 
 
 def _top_n_bar(pivot: pd.DataFrame, months: list[str], top_n: int = 10) -> go.Figure:
@@ -234,5 +276,7 @@ def render_detail_panel(
 
     # ── Sortable table (full) ───────────────────────────────────────────
     with st.expander("Полная таблица (сортируемая)"):
-        st.dataframe(pivot.style.format({c: money for c in pivot.columns}),
-                     use_container_width=True)
+        fmt_dict = {c: money for c in months}
+        if _PCT_COL in pivot.columns:
+            fmt_dict[_PCT_COL] = lambda v: _fmt_cell(_PCT_COL, v)
+        st.dataframe(pivot.style.format(fmt_dict), use_container_width=True)
