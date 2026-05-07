@@ -1,7 +1,4 @@
-# Data files (keep locally, don't commit)
-*.xlsx
-*.xls
-data/
+# Python
 
 # Python
 __pycache__/
