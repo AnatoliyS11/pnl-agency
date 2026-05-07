@@ -5,6 +5,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 from dashboard.components.charts import money, pct, project_scatter
+from dashboard.components.owner_pl_tree import _month_key
 
 
 def _pivot(df: pd.DataFrame, group_col: str, value_col: str,
@@ -35,9 +36,16 @@ def render_agency_earnings(margin_df: pd.DataFrame, months: list[str]) -> None:
     n_clients = df["project"].nunique() if "project" in df.columns else 0
     avg_check = works / n_clients if n_clients else 0.0
 
-    cols = st.columns(2)
+    last_month = sorted(months, key=_month_key)[-1] if months else None
+    n_clients_last = (
+        df[df["month"] == last_month]["project"].nunique()
+        if last_month and "project" in df.columns else 0
+    )
+
+    cols = st.columns(3)
     cols[0].metric("Маржа клиентов", money(margin))
     cols[1].metric("Средний чек",    money(avg_check))
+    cols[2].metric(f"Активных клиентов ({last_month})", n_clients_last)
 
     st.divider()
 

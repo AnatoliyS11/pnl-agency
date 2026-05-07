@@ -1,5 +1,6 @@
 """Editable salary view — writes changes back to the source Excel file."""
 
+import re
 import openpyxl
 import pandas as pd
 import streamlit as st
@@ -112,21 +113,52 @@ def render_salary_editor(salary_df: pd.DataFrame, months: list[str]) -> None:
 
     month = st.selectbox("Месяц для редактирования", available,
                          index=len(available) - 1, key="salary_edit_month")
+
+    # Determine previous month early — needed for % change column
+    prev_idx = available.index(month) - 1
+    prev_month = available[prev_idx] if prev_idx >= 0 else None
+
     df_m = salary_df[salary_df["month"] == month].copy()
     df_m = df_m.drop(columns=["month"], errors="ignore")
 
     if "name" in df_m.columns:
         df_m["name"] = df_m["name"].astype(str).str.replace(r"^ФИО\s+", "", regex=True)
 
-    # Merge vacation_sick + other_pay → vacation_other (п. 11)
+    # Merge vacation_sick + other_pay → vacation_other
     df_m["vacation_other"] = (
         pd.to_numeric(df_m.get("vacation_sick", 0), errors="coerce").fillna(0.0)
         + pd.to_numeric(df_m.get("other_pay", 0), errors="coerce").fillna(0.0)
     )
 
-    # Column order: total_accrued first after identity cols (п. 9)
-    edit_cols_order = ["name", "role", "group", "total_accrued", "fiks",
-                       "manager_bonus", "specialist_bonus", "activity", "vacation_other"]
+    # ── % change column vs previous month ────────────────────────────────
+    prev_accrued_map: dict[str, float] = {}
+    if prev_month is not None:
+        prev_df_raw = salary_df[salary_df["month"] == prev_month]
+        for _, pr in prev_df_raw.iterrows():
+            nm = re.sub(r"^ФИО\s+", "", str(pr.get("name", "")).strip())
+            prev_accrued_map[nm] = float(pr.get("total_accrued", 0) or 0)
+
+    def _pct_label(name, curr_total) -> str:
+        prev = prev_accrued_map.get(str(name).strip())
+        if prev is None or prev == 0:
+            return "—"
+        v = (float(curr_total or 0) - prev) / abs(prev) * 100
+        sign = "+" if v > 0 else ""
+        return f"{sign}{v:.1f}%".replace(".", ",")
+
+    df_m["% к пред."] = df_m.apply(
+        lambda r: _pct_label(r.get("name", ""), r.get("total_accrued", 0)), axis=1
+    )
+
+    # ── Format total_accrued as text (Russian style: "118 987 ₽") ────────
+    df_m["total_accrued_fmt"] = df_m["total_accrued"].apply(
+        lambda v: money(float(v or 0))
+    )
+
+    # Column order: итого+% first, then components
+    edit_cols_order = ["name", "role", "group", "total_accrued_fmt", "% к пред.",
+                       "fiks", "manager_bonus", "specialist_bonus",
+                       "activity", "vacation_other"]
     df_m = df_m.reindex(columns=[c for c in edit_cols_order if c in df_m.columns])
 
     edited = st.data_editor(
@@ -134,26 +166,28 @@ def render_salary_editor(salary_df: pd.DataFrame, months: list[str]) -> None:
         num_rows="dynamic",
         use_container_width=True,
         column_config={
-            "name":             st.column_config.TextColumn("ФИО"),
-            "role":             st.column_config.TextColumn("Роль / должность"),
-            "group":            st.column_config.TextColumn("Группа"),
-            "total_accrued":    st.column_config.NumberColumn("Итого начислено ★", format="%.0f",
-                                                              disabled=True,
-                                                              help="Пересчитывается при сохранении."),
-            "fiks":             st.column_config.NumberColumn("ФИКС",        format="%.0f", step=1000.0),
-            "manager_bonus":    st.column_config.NumberColumn("Бонус M",     format="%.0f", step=1000.0),
-            "specialist_bonus": st.column_config.NumberColumn("Бонус S",     format="%.0f", step=1000.0),
-            "activity":         st.column_config.NumberColumn("KPI",         format="%.0f", step=1000.0),
-            "vacation_other":   st.column_config.NumberColumn("Отпуск и пр.", format="%.0f", step=1000.0),
+            "name":              st.column_config.TextColumn("ФИО"),
+            "role":              st.column_config.TextColumn("Роль / должность"),
+            "group":             st.column_config.TextColumn("Группа"),
+            "total_accrued_fmt": st.column_config.TextColumn(
+                                     "Итого начислено ★",
+                                     help="Пересчитывается при сохранении."),
+            "% к пред.":        st.column_config.TextColumn("% к пред."),
+            "fiks":              st.column_config.NumberColumn("ФИКС",         format="%,.0f ₽", step=1000.0),
+            "manager_bonus":     st.column_config.NumberColumn("Бонус M",      format="%,.0f ₽", step=1000.0),
+            "specialist_bonus":  st.column_config.NumberColumn("Бонус S",      format="%,.0f ₽", step=1000.0),
+            "activity":          st.column_config.NumberColumn("KPI",          format="%,.0f ₽", step=1000.0),
+            "vacation_other":    st.column_config.NumberColumn("Отпуск и пр.", format="%,.0f ₽", step=1000.0),
         },
         key=f"salary_editor_{month}",
     )
 
-    # п. 3: убрана кнопка "Сбросить"
     save_clicked = st.button("💾 Сохранить в Excel", type="primary",
                              key=f"salary_save_{month}")
 
     if save_clicked:
+        # Restore numeric total_accrued for save (recalculated inside _save_salary_to_excel)
+        edited["total_accrued"] = 0.0
         ok, msg = _save_salary_to_excel(month, edited)
         if ok:
             st.success(msg)
@@ -172,9 +206,6 @@ def render_salary_editor(salary_df: pd.DataFrame, months: list[str]) -> None:
     total_now = edited_num[[c for c in num_cols if c in edited_num.columns]].sum().sum()
     headcount = len([n for n in edited["name"].fillna("") if str(n).strip()])
 
-    # п. 10: дельта к предыдущему месяцу
-    prev_idx = available.index(month) - 1
-    prev_month = available[prev_idx] if prev_idx >= 0 else None
     avg_now = total_now / headcount if headcount else 0.0
 
     def _delta_pct(curr, prev):
@@ -194,7 +225,7 @@ def render_salary_editor(salary_df: pd.DataFrame, months: list[str]) -> None:
                 ).fillna(0).sum().sum()
             )
             prev_hc = prev_df["name"].nunique() or 1
-            prev_avg = prev_total / prev_hc
+            prev_avg      = prev_total / prev_hc
             prev_fiks_avg = float(prev_df["fiks"].apply(pd.to_numeric, errors="coerce").fillna(0).sum()) / prev_hc
             prev_kpi_avg  = float(prev_df["activity"].apply(pd.to_numeric, errors="coerce").fillna(0).sum()) / prev_hc
 
@@ -210,9 +241,8 @@ def render_salary_editor(salary_df: pd.DataFrame, months: list[str]) -> None:
     s_cols[3].metric("Итого начислено", money(total_now),
                      delta=_delta_pct(total_now, prev_total))
 
-    # п. 5: средние показатели
     st.caption("Средние на сотрудника:")
     a_cols = st.columns(3)
-    a_cols[0].metric("Средняя ЗП",    money(avg_now),   delta=_delta_pct(avg_now,   prev_avg))
-    a_cols[1].metric("Средний ФИКС",  money(fiks_avg),  delta=_delta_pct(fiks_avg,  prev_fiks_avg))
-    a_cols[2].metric("Средний KPI",   money(kpi_avg),   delta=_delta_pct(kpi_avg,   prev_kpi_avg))
+    a_cols[0].metric("Средняя ЗП",   money(avg_now),   delta=_delta_pct(avg_now,   prev_avg))
+    a_cols[1].metric("Средний ФИКС", money(fiks_avg),  delta=_delta_pct(fiks_avg,  prev_fiks_avg))
+    a_cols[2].metric("Средний KPI",  money(kpi_avg),   delta=_delta_pct(kpi_avg,   prev_kpi_avg))
