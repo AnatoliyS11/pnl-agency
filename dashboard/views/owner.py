@@ -91,6 +91,11 @@ def _render_summary_tab(
     )
     active_months = [focus_month] + compare_months
     pl_active = pl_df[pl_df["month"].isin(active_months)].copy()
+    pl_active["comm_profit"] = pl_active.apply(
+        lambda r: float(r["contribution_margin"]) - _oh_sum(overhead_df, r["month"], _COMMERCIAL_GROUPS, overhead_calc),
+        axis=1,
+    )
+    pl_active["net_profit"] = pl_active["ebit"].apply(float) * 0.80
     focus_row = pl_df[pl_df["month"] == focus_month].iloc[0]
 
     prev_row = None
@@ -267,24 +272,21 @@ def _render_summary_tab(
     # Summary table
     st.subheader("Сводная таблица P&L")
     display_cols = {
-        "month":                    "Месяц",
-        "turnover_vat":             "Оборот с НДС",
-        "revenue":                  "Выручка (работы)",
-        "gross_margin":             "Валовая маржа",
-        "gross_margin_pct":         "Валовая маржа %",
-        "fot":                      "ФОТ",
-        "contribution_margin":      "Маржа вклада",
-        "contribution_margin_pct":  "Маржа вклада %",
-        "overhead":                 "Накладные",
-        "ebit":                     "EBIT",
-        "ebit_pct":                 "EBIT %",
+        "month":        "Месяц",
+        "revenue":      "Выручка (работы)",
+        "comm_profit":  "Коммерческая прибыль",
+        "ebit":         "Операционная прибыль",
+        "net_profit":   "Чистая прибыль",
+        "fot":          "ФОТ",
+        "overhead":     "Накладные",
+        "ebit_pct":     "EBIT %",
     }
-    tbl = pl_active[list(display_cols.keys())].rename(columns=display_cols)
-    pct_cols   = ["Валовая маржа %", "Маржа вклада %", "EBIT %"]
-    money_cols = ["Оборот с НДС", "Выручка (работы)", "Валовая маржа", "ФОТ",
-                  "Маржа вклада", "Накладные", "EBIT"]
-    fmt_dict = {c: money for c in money_cols}
-    fmt_dict.update({c: pct for c in pct_cols})
+    tbl = pl_active[[c for c in display_cols if c in pl_active.columns]].rename(columns=display_cols)
+    money_cols = ["Выручка (работы)", "Коммерческая прибыль", "Операционная прибыль",
+                  "Чистая прибыль", "ФОТ", "Накладные"]
+    fmt_dict = {c: money for c in money_cols if c in tbl.columns}
+    if "EBIT %" in tbl.columns:
+        fmt_dict["EBIT %"] = pct
     st.dataframe(tbl.style.format(fmt_dict), use_container_width=True, hide_index=True)
 
 

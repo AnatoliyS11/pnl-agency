@@ -179,15 +179,17 @@ def dynamic_bar_chart(pl_df: pd.DataFrame, metric: str, title: str) -> go.Figure
 
 
 def multi_metric_bar(pl_df: pd.DataFrame) -> go.Figure:
-    """Grouped bar chart: revenue, gross margin, ebit per month."""
+    """Grouped bar chart: revenue, comm_profit, ebit, net_profit per month."""
     metrics = [
-        ("revenue", "Выручка", COLORS["revenue"]),
-        ("gross_margin", "Валовая маржа", COLORS["gross_margin"]),
-        ("contribution_margin", "Маржа вклада", COLORS["contribution_margin"]),
-        ("ebit", "EBIT", COLORS["ebit"]),
+        ("revenue",     "Выручка",                "#4CAF50"),
+        ("comm_profit", "Коммерческая прибыль",   "#2196F3"),
+        ("ebit",        "Операционная прибыль",   "#9C27B0"),
+        ("net_profit",  "Чистая прибыль",         "#FF9800"),
     ]
     fig = go.Figure()
     for key, label, color in metrics:
+        if key not in pl_df.columns:
+            continue
         fig.add_trace(go.Bar(
             name=label,
             x=pl_df["month"],
