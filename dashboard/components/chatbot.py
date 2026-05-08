@@ -1,8 +1,61 @@
-"""AI assistant panel — floating FAB + expandable chat window."""
+"""AI assistant — floating FAB + chat panel, position:fixed via CSS :has()."""
 
 import streamlit as st
 import pandas as pd
 from dashboard.components.charts import money, pct
+
+# CSS targeting the stVerticalBlock that directly contains our anchor marker.
+# :has(> div.element-container:has(#anchor-id)) means "the stVerticalBlock whose
+# direct child element-container contains the anchor" — targets the innermost block.
+_CHAT_CSS = """
+<style>
+/* ── FAB mode: tiny fixed circle at bottom-right ── */
+div[data-testid="stVerticalBlock"]:has(
+    > div.element-container > div[data-testid="stMarkdownContainer"] > #chatbot-fab-anchor
+) {
+    position: fixed !important;
+    bottom: 24px !important;
+    right: 24px !important;
+    z-index: 9999 !important;
+    width: auto !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+div[data-testid="stVerticalBlock"]:has(
+    > div.element-container > div[data-testid="stMarkdownContainer"] > #chatbot-fab-anchor
+) button {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 50% !important;
+    background: #1a237e !important;
+    color: white !important;
+    font-size: 24px !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: 0 4px 16px rgba(26,35,126,0.40) !important;
+    cursor: pointer !important;
+    min-height: unset !important;
+}
+
+/* ── Panel mode: card fixed at bottom-right ── */
+div[data-testid="stVerticalBlock"]:has(
+    > div.element-container > div[data-testid="stMarkdownContainer"] > #chatbot-panel-anchor
+) {
+    position: fixed !important;
+    bottom: 24px !important;
+    right: 24px !important;
+    z-index: 9999 !important;
+    width: 370px !important;
+    background: white !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+    padding: 16px 16px 12px !important;
+    max-height: 600px !important;
+    overflow-y: auto !important;
+}
+</style>
+"""
 
 
 def _build_data_context(
@@ -85,7 +138,6 @@ def _ask_claude(user_message: str, data_context: str, history: list[dict]) -> st
         api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
         if not api_key:
             return "⚠️ API ключ не настроен. Добавьте ANTHROPIC_API_KEY в Streamlit Secrets."
-
         client = anthropic.Anthropic(api_key=api_key)
         system = (
             "Ты финансовый аналитик агентства «Шелковый путь». "
@@ -94,12 +146,8 @@ def _ask_claude(user_message: str, data_context: str, history: list[dict]) -> st
             "Используй цифры из данных. Если данных недостаточно — честно скажи.\n\n"
             + data_context
         )
-        messages = [
-            {"role": m["role"], "content": m["content"]}
-            for m in history[-6:]
-        ]
+        messages = [{"role": m["role"], "content": m["content"]} for m in history[-6:]]
         messages.append({"role": "user", "content": user_message})
-
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=600,
@@ -123,26 +171,31 @@ def render_chatbot(
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # ── Закрыт: показываем только FAB ────────────────────────────────────────
+    # Inject CSS once
+    st.markdown(_CHAT_CSS, unsafe_allow_html=True)
+
+    # ── FAB (закрыт) ──────────────────────────────────────────────────────────
     if not st.session_state.chatbot_open:
+        st.markdown('<div id="chatbot-fab-anchor"></div>', unsafe_allow_html=True)
         if st.button("💬", key="chat_open_btn", help="Открыть ИИ-аналитик"):
             st.session_state.chatbot_open = True
             st.rerun()
         return
 
-    # ── Открыт: полная панель ─────────────────────────────────────────────────
-    header_l, header_r = st.columns([4, 1])
-    with header_l:
+    # ── Панель (открыта) ──────────────────────────────────────────────────────
+    st.markdown('<div id="chatbot-panel-anchor"></div>', unsafe_allow_html=True)
+
+    hdr_l, hdr_r = st.columns([5, 1])
+    with hdr_l:
         st.markdown("**🤖 ИИ-аналитик**")
-    with header_r:
+    with hdr_r:
         if st.button("✕", key="chat_close_btn", help="Закрыть"):
             st.session_state.chatbot_open = False
             st.rerun()
 
     st.divider()
 
-    # История сообщений
-    with st.container(height=400):
+    with st.container(height=380):
         if not st.session_state.chat_history:
             st.caption("Спросите, например:")
             st.caption("• «Выручка за последний месяц?»")
@@ -152,7 +205,6 @@ def render_chatbot(
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
-    # Поле ввода
     if prompt := st.chat_input("Спросите о данных...", key="chatbot_input"):
         st.session_state.chat_history.append({"role": "user", "content": prompt})
         context = _build_data_context(pl_df, margin_df, salary_df, overhead_df, months)
@@ -160,7 +212,6 @@ def render_chatbot(
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
         st.rerun()
 
-    # Кнопка очистки
     if st.session_state.chat_history:
         if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
             st.session_state.chat_history = []

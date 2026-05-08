@@ -56,20 +56,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { font-size: 14px; }
     .stAlert { border-radius: 8px; }
 
-    /* FAB кнопка — круглая, когда чат закрыт */
-    [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child
-        div[data-testid="stButton"]:first-of-type button {
-        width: 52px !important;
-        height: 52px !important;
-        border-radius: 50% !important;
-        background: #1a237e !important;
-        color: white !important;
-        font-size: 22px !important;
-        padding: 0 !important;
-        border: none !important;
-        box-shadow: 0 4px 16px rgba(26,35,126,0.35) !important;
-        margin-top: 12px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -228,34 +214,24 @@ with st.sidebar:
             else:
                 st.caption(f"✅ {r['msg']}")
 
-# ── Render view + AI chatbot ─────────────────────────────────────────────────
-from dashboard.components.chatbot import render_chatbot
+# ── Render view (full width) ─────────────────────────────────────────────────
+if "Собственник" in view:
+    from dashboard.views.owner import render
+    refunds_filtered = (refunds_df[refunds_df["month"].isin(months)]
+                        if not refunds_df.empty else refunds_df)
+    render(pl_df, overhead_df, margin_df=margin_filtered, salary_df=salary_filtered,
+           months=months, overhead_calc=overhead_calc, refunds_df=refunds_filtered)
 
-if "chatbot_open" not in st.session_state:
-    st.session_state.chatbot_open = False
+elif "Руководитель" in view:
+    from dashboard.views.director import render
+    render(project_df, pl_df, months, salary_df=salary_filtered,
+           fot_scenario=fot_scenario)
 
-if st.session_state.chatbot_open:
-    main_col, chat_col = st.columns([3, 1], gap="medium")
 else:
-    main_col, chat_col = st.columns([20, 1], gap="small")
+    from dashboard.views.operational import render
+    render(pl_df, project_df, overhead_df, salary_filtered, forecast_df,
+           fot_scenario=fot_scenario)
 
-with main_col:
-    if "Собственник" in view:
-        from dashboard.views.owner import render
-        refunds_filtered = (refunds_df[refunds_df["month"].isin(months)]
-                            if not refunds_df.empty else refunds_df)
-        render(pl_df, overhead_df, margin_df=margin_filtered, salary_df=salary_filtered,
-               months=months, overhead_calc=overhead_calc, refunds_df=refunds_filtered)
-
-    elif "Руководитель" in view:
-        from dashboard.views.director import render
-        render(project_df, pl_df, months, salary_df=salary_filtered,
-               fot_scenario=fot_scenario)
-
-    else:
-        from dashboard.views.operational import render
-        render(pl_df, project_df, overhead_df, salary_filtered, forecast_df,
-               fot_scenario=fot_scenario)
-
-with chat_col:
-    render_chatbot(pl_df, margin_filtered, salary_filtered, overhead_df, months)
+# ── AI Chatbot (position:fixed, bottom-right) ────────────────────────────────
+from dashboard.components.chatbot import render_chatbot
+render_chatbot(pl_df, margin_filtered, salary_filtered, overhead_df, months)
