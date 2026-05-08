@@ -1,4 +1,4 @@
-"""AI assistant — uses Streamlit's native bottom-fixed chat_input."""
+"""AI assistant panel — right-column chat, scrolls with page."""
 
 import streamlit as st
 import pandas as pd
@@ -116,20 +116,35 @@ def render_chatbot(
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # История чата — показываем когда есть сообщения
-    if st.session_state.chat_history:
-        with st.expander("🤖 ИИ-аналитик — история чата", expanded=True):
-            for msg in st.session_state.chat_history:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-            if st.button("🗑 Очистить", key="chat_clear_btn"):
-                st.session_state.chat_history = []
-                st.rerun()
+    st.markdown("### 🤖 ИИ-аналитик")
+    st.caption("Задайте вопрос по данным")
 
-    # Поле ввода — Streamlit автоматически закрепляет его внизу экрана
-    if prompt := st.chat_input("🤖 Спросите ИИ-аналитика о данных...", key="chatbot_input"):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
+    # История сообщений
+    with st.container(height=420):
+        if not st.session_state.chat_history:
+            st.caption("Примеры вопросов:")
+            st.caption("• Выручка за последний месяц?")
+            st.caption("• Топ клиентов по марже?")
+            st.caption("• Как изменился EBIT?")
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+    # Форма ввода — работает внутри колонки
+    with st.form(key="chat_form", clear_on_submit=True):
+        user_input = st.text_input(
+            "", placeholder="Введите вопрос...", label_visibility="collapsed"
+        )
+        submitted = st.form_submit_button("Отправить →", use_container_width=True)
+
+    if submitted and user_input.strip():
+        st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
         context = _build_data_context(pl_df, margin_df, salary_df, overhead_df, months)
-        answer = _ask_claude(prompt, context, st.session_state.chat_history[:-1])
+        answer = _ask_claude(user_input.strip(), context, st.session_state.chat_history[:-1])
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
         st.rerun()
+
+    if st.session_state.chat_history:
+        if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
+            st.session_state.chat_history = []
+            st.rerun()
