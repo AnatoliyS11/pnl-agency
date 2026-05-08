@@ -56,17 +56,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { font-size: 14px; }
     .stAlert { border-radius: 8px; }
 
-    /* ── Chat panel: sticky правая колонка ─────────────────────────────── */
-    [data-testid="stHorizontalBlock"] {
-        align-items: flex-start !important;
-    }
-    [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child {
-        position: sticky !important;
-        top: 0 !important;
-        max-height: 100vh !important;
-        overflow-y: auto !important;
-        align-self: flex-start !important;
-    }
     /* FAB кнопка — круглая, когда чат закрыт */
     [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child
         div[data-testid="stButton"]:first-of-type button {
