@@ -55,6 +55,32 @@ st.markdown("""
     h1, h2, h3 { color: #1a237e; }
     .stTabs [data-baseweb="tab"] { font-size: 14px; }
     .stAlert { border-radius: 8px; }
+
+    /* ── Chat panel: sticky правая колонка ─────────────────────────────── */
+    [data-testid="stHorizontalBlock"] {
+        align-items: flex-start !important;
+    }
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child {
+        position: sticky !important;
+        top: 0 !important;
+        max-height: 100vh !important;
+        overflow-y: auto !important;
+        align-self: flex-start !important;
+    }
+    /* FAB кнопка — круглая, когда чат закрыт */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child
+        div[data-testid="stButton"]:first-of-type button {
+        width: 52px !important;
+        height: 52px !important;
+        border-radius: 50% !important;
+        background: #1a237e !important;
+        color: white !important;
+        font-size: 22px !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: 0 4px 16px rgba(26,35,126,0.35) !important;
+        margin-top: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,7 +242,13 @@ with st.sidebar:
 # ── Render view + AI chatbot ─────────────────────────────────────────────────
 from dashboard.components.chatbot import render_chatbot
 
-main_col, chat_col = st.columns([3, 1], gap="medium")
+if "chatbot_open" not in st.session_state:
+    st.session_state.chatbot_open = False
+
+if st.session_state.chatbot_open:
+    main_col, chat_col = st.columns([3, 1], gap="medium")
+else:
+    main_col, chat_col = st.columns([20, 1], gap="small")
 
 with main_col:
     if "Собственник" in view:

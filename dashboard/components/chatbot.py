@@ -1,4 +1,4 @@
-"""AI assistant panel — answers questions based on current dashboard data."""
+"""AI assistant panel — floating FAB + expandable chat window."""
 
 import streamlit as st
 import pandas as pd
@@ -14,7 +14,6 @@ def _build_data_context(
 ) -> str:
     lines = [f"Данные за период: {', '.join(months)}", ""]
 
-    # P&L по месяцам
     lines.append("=== P&L ===")
     for _, row in pl_df[pl_df["month"].isin(months)].iterrows():
         lines.append(
@@ -24,7 +23,6 @@ def _build_data_context(
             f"маржа вклада {money(row['contribution_margin'])}"
         )
 
-    # Топ-5 клиентов по выручке
     if margin_df is not None and not margin_df.empty:
         lines.append("\n=== Топ-5 клиентов по выручке ===")
         top = (
@@ -53,7 +51,6 @@ def _build_data_context(
         for plat, v in by_plat.items():
             lines.append(f"  {plat}: {money(v)}")
 
-    # Зарплаты
     if salary_df is not None and not salary_df.empty:
         lines.append("\n=== Зарплаты ===")
         sal = salary_df[salary_df["month"].isin(months)]
@@ -69,7 +66,6 @@ def _build_data_context(
             for role, v in by_role.items():
                 lines.append(f"  {role}: {money(v)}")
 
-    # Накладные топ-3
     if overhead_df is not None and not overhead_df.empty:
         lines.append("\n=== Накладные (топ-3 категории) ===")
         top_oh = (
@@ -122,16 +118,36 @@ def render_chatbot(
     overhead_df: pd.DataFrame | None,
     months: list[str],
 ) -> None:
-    st.markdown("### 🤖 ИИ-аналитик")
-    st.caption("Задайте вопрос по данным дашборда")
-
+    if "chatbot_open" not in st.session_state:
+        st.session_state.chatbot_open = False
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Прокручиваемое окно диалога
-    with st.container(height=460):
+    # ── Закрыт: показываем только FAB ────────────────────────────────────────
+    if not st.session_state.chatbot_open:
+        if st.button("💬", key="chat_open_btn", help="Открыть ИИ-аналитик"):
+            st.session_state.chatbot_open = True
+            st.rerun()
+        return
+
+    # ── Открыт: полная панель ─────────────────────────────────────────────────
+    header_l, header_r = st.columns([4, 1])
+    with header_l:
+        st.markdown("**🤖 ИИ-аналитик**")
+    with header_r:
+        if st.button("✕", key="chat_close_btn", help="Закрыть"):
+            st.session_state.chatbot_open = False
+            st.rerun()
+
+    st.divider()
+
+    # История сообщений
+    with st.container(height=400):
         if not st.session_state.chat_history:
-            st.caption("👋 Спросите, например: «Какая выручка за последний месяц?» или «Топ клиентов по марже?»")
+            st.caption("Спросите, например:")
+            st.caption("• «Выручка за последний месяц?»")
+            st.caption("• «Топ клиентов по марже?»")
+            st.caption("• «Как изменился EBIT?»")
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -144,8 +160,8 @@ def render_chatbot(
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
         st.rerun()
 
-    # Кнопка сброса
+    # Кнопка очистки
     if st.session_state.chat_history:
-        if st.button("🗑 Очистить чат", use_container_width=True, key="chatbot_clear"):
+        if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
             st.session_state.chat_history = []
             st.rerun()
