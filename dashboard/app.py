@@ -213,20 +213,28 @@ with st.sidebar:
             else:
                 st.caption(f"✅ {r['msg']}")
 
-# ── Render view ──────────────────────────────────────────────────────────────
-if "Собственник" in view:
-    from dashboard.views.owner import render
-    refunds_filtered = (refunds_df[refunds_df["month"].isin(months)]
-                        if not refunds_df.empty else refunds_df)
-    render(pl_df, overhead_df, margin_df=margin_filtered, salary_df=salary_filtered,
-           months=months, overhead_calc=overhead_calc, refunds_df=refunds_filtered)
+# ── Render view + AI chatbot ─────────────────────────────────────────────────
+from dashboard.components.chatbot import render_chatbot
 
-elif "Руководитель" in view:
-    from dashboard.views.director import render
-    render(project_df, pl_df, months, salary_df=salary_filtered,
-           fot_scenario=fot_scenario)
+main_col, chat_col = st.columns([3, 1], gap="medium")
 
-else:
-    from dashboard.views.operational import render
-    render(pl_df, project_df, overhead_df, salary_filtered, forecast_df,
-           fot_scenario=fot_scenario)
+with main_col:
+    if "Собственник" in view:
+        from dashboard.views.owner import render
+        refunds_filtered = (refunds_df[refunds_df["month"].isin(months)]
+                            if not refunds_df.empty else refunds_df)
+        render(pl_df, overhead_df, margin_df=margin_filtered, salary_df=salary_filtered,
+               months=months, overhead_calc=overhead_calc, refunds_df=refunds_filtered)
+
+    elif "Руководитель" in view:
+        from dashboard.views.director import render
+        render(project_df, pl_df, months, salary_df=salary_filtered,
+               fot_scenario=fot_scenario)
+
+    else:
+        from dashboard.views.operational import render
+        render(pl_df, project_df, overhead_df, salary_filtered, forecast_df,
+               fot_scenario=fot_scenario)
+
+with chat_col:
+    render_chatbot(pl_df, margin_filtered, salary_filtered, overhead_df, months)

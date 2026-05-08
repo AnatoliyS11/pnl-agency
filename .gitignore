@@ -9,8 +9,9 @@ venv/
 env/
 *.egg-info/
 
-# Streamlit cache
+# Streamlit cache and secrets
 .streamlit/cache/
+.streamlit/secrets.toml
 
 # IDE
 .vscode/
