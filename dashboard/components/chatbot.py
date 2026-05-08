@@ -4,15 +4,13 @@ import streamlit as st
 import pandas as pd
 from dashboard.components.charts import money, pct
 
-# CSS targeting the stVerticalBlock that directly contains our anchor marker.
-# :has(> div.element-container:has(#anchor-id)) means "the stVerticalBlock whose
-# direct child element-container contains the anchor" — targets the innermost block.
+# st.container() creates its own stVerticalBlock in Streamlit's DOM.
+# CSS :has(> div:has(#anchor)) targets ONLY that container's stVerticalBlock,
+# not any outer ancestor — so position:fixed applies only to the chatbot block.
 _CHAT_CSS = """
 <style>
-/* ── FAB mode: tiny fixed circle at bottom-right ── */
-div[data-testid="stVerticalBlock"]:has(
-    > div.element-container > div[data-testid="stMarkdownContainer"] > #chatbot-fab-anchor
-) {
+/* ── FAB: fixed circle, bottom-right ── */
+div[data-testid="stVerticalBlock"]:has(> div:has(#chatbot-fab-anchor)) {
     position: fixed !important;
     bottom: 24px !important;
     right: 24px !important;
@@ -21,9 +19,7 @@ div[data-testid="stVerticalBlock"]:has(
     background: transparent !important;
     padding: 0 !important;
 }
-div[data-testid="stVerticalBlock"]:has(
-    > div.element-container > div[data-testid="stMarkdownContainer"] > #chatbot-fab-anchor
-) button {
+div[data-testid="stVerticalBlock"]:has(> div:has(#chatbot-fab-anchor)) button {
     width: 56px !important;
     height: 56px !important;
     border-radius: 50% !important;
@@ -38,10 +34,8 @@ div[data-testid="stVerticalBlock"]:has(
     min-height: unset !important;
 }
 
-/* ── Panel mode: card fixed at bottom-right ── */
-div[data-testid="stVerticalBlock"]:has(
-    > div.element-container > div[data-testid="stMarkdownContainer"] > #chatbot-panel-anchor
-) {
+/* ── Panel: fixed card, bottom-right ── */
+div[data-testid="stVerticalBlock"]:has(> div:has(#chatbot-panel-anchor)) {
     position: fixed !important;
     bottom: 24px !important;
     right: 24px !important;
@@ -171,48 +165,51 @@ def render_chatbot(
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Inject CSS once
+    # CSS инжектируется глобально — вне контейнера
     st.markdown(_CHAT_CSS, unsafe_allow_html=True)
 
     # ── FAB (закрыт) ──────────────────────────────────────────────────────────
     if not st.session_state.chatbot_open:
-        st.markdown('<div id="chatbot-fab-anchor"></div>', unsafe_allow_html=True)
-        if st.button("💬", key="chat_open_btn", help="Открыть ИИ-аналитик"):
-            st.session_state.chatbot_open = True
-            st.rerun()
+        with st.container():
+            # Якорный маркер — CSS таргетирует этот stVerticalBlock
+            st.markdown('<div id="chatbot-fab-anchor"></div>', unsafe_allow_html=True)
+            if st.button("💬", key="chat_open_btn", help="Открыть ИИ-аналитик"):
+                st.session_state.chatbot_open = True
+                st.rerun()
         return
 
     # ── Панель (открыта) ──────────────────────────────────────────────────────
-    st.markdown('<div id="chatbot-panel-anchor"></div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div id="chatbot-panel-anchor"></div>', unsafe_allow_html=True)
 
-    hdr_l, hdr_r = st.columns([5, 1])
-    with hdr_l:
-        st.markdown("**🤖 ИИ-аналитик**")
-    with hdr_r:
-        if st.button("✕", key="chat_close_btn", help="Закрыть"):
-            st.session_state.chatbot_open = False
+        hdr_l, hdr_r = st.columns([5, 1])
+        with hdr_l:
+            st.markdown("**🤖 ИИ-аналитик**")
+        with hdr_r:
+            if st.button("✕", key="chat_close_btn", help="Закрыть"):
+                st.session_state.chatbot_open = False
+                st.rerun()
+
+        st.divider()
+
+        with st.container(height=380):
+            if not st.session_state.chat_history:
+                st.caption("Спросите, например:")
+                st.caption("• «Выручка за последний месяц?»")
+                st.caption("• «Топ клиентов по марже?»")
+                st.caption("• «Как изменился EBIT?»")
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+        if prompt := st.chat_input("Спросите о данных...", key="chatbot_input"):
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            context = _build_data_context(pl_df, margin_df, salary_df, overhead_df, months)
+            answer = _ask_claude(prompt, context, st.session_state.chat_history[:-1])
+            st.session_state.chat_history.append({"role": "assistant", "content": answer})
             st.rerun()
 
-    st.divider()
-
-    with st.container(height=380):
-        if not st.session_state.chat_history:
-            st.caption("Спросите, например:")
-            st.caption("• «Выручка за последний месяц?»")
-            st.caption("• «Топ клиентов по марже?»")
-            st.caption("• «Как изменился EBIT?»")
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-    if prompt := st.chat_input("Спросите о данных...", key="chatbot_input"):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        context = _build_data_context(pl_df, margin_df, salary_df, overhead_df, months)
-        answer = _ask_claude(prompt, context, st.session_state.chat_history[:-1])
-        st.session_state.chat_history.append({"role": "assistant", "content": answer})
-        st.rerun()
-
-    if st.session_state.chat_history:
-        if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
-            st.session_state.chat_history = []
-            st.rerun()
+        if st.session_state.chat_history:
+            if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
+                st.session_state.chat_history = []
+                st.rerun()
