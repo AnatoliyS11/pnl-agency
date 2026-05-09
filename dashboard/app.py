@@ -216,7 +216,7 @@ with st.sidebar:
 
 # ── Render view + AI Chatbot (fixed right panel) ─────────────────────────────
 from dashboard.components.chatbot import render_chatbot
-main_col, chat_col = st.columns([3, 1], gap="medium")
+main_col, chat_col = st.columns([40, 1], gap="small")
 
 with main_col:
     if "Собственник" in view:

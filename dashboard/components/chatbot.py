@@ -116,49 +116,77 @@ def render_chatbot(
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     if "chatbot_open" not in st.session_state:
-        st.session_state.chatbot_open = True
+        st.session_state.chatbot_open = False  # starts as FAB bubble
 
-    # position:fixed — right panel always visible.
-    # max-width on LEFT column prevents content from going under chatbot,
-    # without creating phantom empty space (unlike padding-right on container).
-    panel_w = "300px" if st.session_state.chatbot_open else "52px"
-    left_max = f"calc(100% - {panel_w})"
-    st.markdown(
-        f"""<div id="chatbot-col"></div>
-<style>
-div[data-testid="column"]:has(#chatbot-col) {{
+    is_open = st.session_state.chatbot_open
+
+    if is_open:
+        panel_css = """
+div[data-testid="column"]:has(#chatbot-col) {
     position: fixed !important;
-    top: 0 !important;
-    right: 0 !important;
-    width: {panel_w} !important;
-    height: 100vh !important;
+    bottom: 90px !important;
+    right: 24px !important;
+    top: auto !important;
+    width: 360px !important;
+    height: 520px !important;
+    border-radius: 16px !important;
+    background: white !important;
+    border: 1px solid #e0e0e0 !important;
+    z-index: 9999 !important;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18) !important;
     overflow-y: auto !important;
-    background: #FAFAFA !important;
-    border-left: 1px solid #e0e0e0 !important;
-    z-index: 999 !important;
-    padding: 0.75rem 0.5rem !important;
-    box-shadow: -2px 0 8px rgba(0,0,0,0.06) !important;
-}}
-div[data-testid="stHorizontalBlock"]:has(#chatbot-col) > div[data-testid="column"]:first-child {{
-    max-width: {left_max} !important;
-}}
-</style>""",
+    padding: 14px 12px 8px !important;
+}"""
+    else:
+        panel_css = """
+div[data-testid="column"]:has(#chatbot-col) {
+    position: fixed !important;
+    bottom: 24px !important;
+    right: 24px !important;
+    top: auto !important;
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 50% !important;
+    background: #1a237e !important;
+    z-index: 9999 !important;
+    box-shadow: 0 4px 20px rgba(26,35,126,0.45) !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+}
+div[data-testid="column"]:has(#chatbot-col) button {
+    width: 64px !important;
+    height: 64px !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    border: none !important;
+    font-size: 26px !important;
+    padding: 0 !important;
+    color: white !important;
+}"""
+
+    st.markdown(
+        f'<div id="chatbot-col"></div><style>{panel_css}</style>',
         unsafe_allow_html=True,
     )
 
-    btn_label = "◀" if st.session_state.chatbot_open else "▶"
-    btn_help = "Свернуть" if st.session_state.chatbot_open else "Развернуть ИИ-аналитик"
-    if st.button(btn_label, key="chat_toggle_btn", help=btn_help):
-        st.session_state.chatbot_open = not st.session_state.chatbot_open
-        st.rerun()
-
-    if not st.session_state.chatbot_open:
+    # ── Closed: FAB bubble ────────────────────────────────────────────────────
+    if not is_open:
+        if st.button("💬", key="chat_open_btn"):
+            st.session_state.chatbot_open = True
+            st.rerun()
         return
 
-    st.markdown("### 🤖 ИИ-аналитик")
-    st.caption("Задайте вопрос по данным")
+    # ── Open: chat window ─────────────────────────────────────────────────────
+    hdr_col, close_col = st.columns([5, 1])
+    with hdr_col:
+        st.markdown("**🤖 ИИ-аналитик**")
+        st.caption("Задайте вопрос по данным")
+    with close_col:
+        if st.button("✕", key="chat_close_btn"):
+            st.session_state.chatbot_open = False
+            st.rerun()
 
-    with st.container(height=380):
+    with st.container(height=310):
         if not st.session_state.chat_history:
             st.caption("Примеры вопросов:")
             st.caption("• Выручка за последний месяц?")
@@ -182,6 +210,6 @@ div[data-testid="stHorizontalBlock"]:has(#chatbot-col) > div[data-testid="column
         st.rerun()
 
     if st.session_state.chat_history:
-        if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
+        if st.button("🗑 Очистить", key="chat_clear_btn", use_container_width=True):
             st.session_state.chat_history = []
             st.rerun()
