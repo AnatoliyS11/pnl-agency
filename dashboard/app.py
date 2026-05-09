@@ -214,9 +214,9 @@ with st.sidebar:
             else:
                 st.caption(f"✅ {r['msg']}")
 
-# ── Render view + AI Chatbot (fixed right panel) ─────────────────────────────
+# ── Render view + AI Chatbot (right column) ──────────────────────────────────
 from dashboard.components.chatbot import render_chatbot
-main_col, chat_col = st.columns([40, 1], gap="small")
+main_col, chat_col = st.columns([3, 1], gap="medium")
 
 with main_col:
     if "Собственник" in view:
