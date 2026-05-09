@@ -118,8 +118,32 @@ def render_chatbot(
     if "chatbot_open" not in st.session_state:
         st.session_state.chatbot_open = True
 
-    # CSS anchor: app.py uses div[data-testid="column"]:has(#chatbot-col) for sticky
-    st.markdown('<div id="chatbot-col"></div>', unsafe_allow_html=True)
+    # position:fixed — работает как левый сайдбар, но справа.
+    # Ширина и отступ основного контента меняются в зависимости от open/closed.
+    panel_w = "300px" if st.session_state.chatbot_open else "52px"
+    content_mr = "316px" if st.session_state.chatbot_open else "68px"
+    st.markdown(
+        f"""<div id="chatbot-col"></div>
+<style>
+div[data-testid="column"]:has(#chatbot-col) {{
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: {panel_w} !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
+    background: #FAFAFA !important;
+    border-left: 1px solid #e0e0e0 !important;
+    z-index: 999 !important;
+    padding: 0.75rem 0.5rem !important;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.06) !important;
+}}
+div[data-testid="stHorizontalBlock"]:has(#chatbot-col) {{
+    padding-right: {content_mr} !important;
+}}
+</style>""",
+        unsafe_allow_html=True,
+    )
 
     btn_label = "◀" if st.session_state.chatbot_open else "▶"
     btn_help = "Свернуть" if st.session_state.chatbot_open else "Развернуть ИИ-аналитик"

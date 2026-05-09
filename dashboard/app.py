@@ -56,18 +56,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { font-size: 14px; }
     .stAlert { border-radius: 8px; }
 
-    /* Sticky chatbot column — stays in viewport on scroll */
-    div[data-testid="stHorizontalBlock"]:has(#chatbot-col) {
-        align-items: flex-start !important;
-    }
-    div[data-testid="column"]:has(#chatbot-col) {
-        position: sticky !important;
-        top: 0 !important;
-        max-height: 100vh !important;
-        overflow-y: auto !important;
-        align-self: flex-start !important;
-    }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -226,12 +214,9 @@ with st.sidebar:
             else:
                 st.caption(f"✅ {r['msg']}")
 
-# ── Render view + AI Chatbot (right column) ──────────────────────────────────
+# ── Render view + AI Chatbot (fixed right panel) ─────────────────────────────
 from dashboard.components.chatbot import render_chatbot
-if "chatbot_open" not in st.session_state:
-    st.session_state.chatbot_open = True
-col_ratio = [3, 1] if st.session_state.chatbot_open else [20, 1]
-main_col, chat_col = st.columns(col_ratio, gap="medium")
+main_col, chat_col = st.columns([3, 1], gap="medium")
 
 with main_col:
     if "Собственник" in view:
