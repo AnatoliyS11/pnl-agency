@@ -115,12 +115,26 @@ def render_chatbot(
 ) -> None:
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    if "chatbot_open" not in st.session_state:
+        st.session_state.chatbot_open = True
+
+    # CSS anchor: app.py uses div[data-testid="column"]:has(#chatbot-col) for sticky
+    st.markdown('<div id="chatbot-col"></div>', unsafe_allow_html=True)
+
+    btn_label = "◀" if st.session_state.chatbot_open else "▶"
+    btn_help = "Свернуть" if st.session_state.chatbot_open else "Развернуть ИИ-аналитик"
+    if st.button(btn_label, key="chat_toggle_btn", help=btn_help):
+        st.session_state.chatbot_open = not st.session_state.chatbot_open
+        st.rerun()
+
+    if not st.session_state.chatbot_open:
+        return
 
     st.markdown("### 🤖 ИИ-аналитик")
     st.caption("Задайте вопрос по данным")
 
     # История сообщений
-    with st.container(height=420):
+    with st.container(height=380):
         if not st.session_state.chat_history:
             st.caption("Примеры вопросов:")
             st.caption("• Выручка за последний месяц?")
