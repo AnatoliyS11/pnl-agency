@@ -1,4 +1,4 @@
-"""AI assistant panel — right-column chat, scrolls with page."""
+"""AI assistant — sidebar popover button + floating chat panel."""
 
 import streamlit as st
 import pandas as pd
@@ -106,83 +106,53 @@ def _ask_claude(user_message: str, data_context: str, history: list[dict]) -> st
         return f"⚠️ Ошибка API: {e}"
 
 
-def render_chatbot(
+def render_chatbot_popover() -> None:
+    """Sidebar popover button — chat history persists in session_state."""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    with st.popover("💬 ИИ-аналитик", use_container_width=True):
+        st.markdown("**🤖 ИИ-аналитик**")
+        st.caption("Задайте вопрос по данным дашборда")
+
+        with st.container(height=350):
+            if not st.session_state.chat_history:
+                st.caption("Примеры вопросов:")
+                st.caption("• Выручка за последний месяц?")
+                st.caption("• Топ клиентов по марже?")
+                st.caption("• Как изменился EBIT?")
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+        with st.form(key="chat_form", clear_on_submit=True):
+            user_input = st.text_input(
+                "", placeholder="Введите вопрос...", label_visibility="collapsed"
+            )
+            submitted = st.form_submit_button("Отправить →", use_container_width=True)
+
+        if submitted and user_input.strip():
+            st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
+            # Retrieve data context from session_state (stored by app.py before render)
+            context = st.session_state.get("_chatbot_context", "Данные недоступны.")
+            answer = _ask_claude(user_input.strip(), context, st.session_state.chat_history[:-1])
+            st.session_state.chat_history.append({"role": "assistant", "content": answer})
+            st.rerun()
+
+        if st.session_state.chat_history:
+            if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
+                st.session_state.chat_history = []
+                st.rerun()
+
+
+def prepare_chatbot_context(
     pl_df: pd.DataFrame,
     margin_df: pd.DataFrame | None,
     salary_df: pd.DataFrame | None,
     overhead_df: pd.DataFrame | None,
     months: list[str],
 ) -> None:
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    if "chatbot_open" not in st.session_state:
-        st.session_state.chatbot_open = True
-
-    # position:fixed — работает как левый сайдбар, но справа.
-    # Ширина и отступ основного контента меняются в зависимости от open/closed.
-    panel_w = "300px" if st.session_state.chatbot_open else "52px"
-    content_mr = "316px" if st.session_state.chatbot_open else "68px"
-    st.markdown(
-        f"""<div id="chatbot-col"></div>
-<style>
-div[data-testid="column"]:has(#chatbot-col) {{
-    position: fixed !important;
-    top: 0 !important;
-    right: 0 !important;
-    width: {panel_w} !important;
-    height: 100vh !important;
-    overflow-y: auto !important;
-    background: #FAFAFA !important;
-    border-left: 1px solid #e0e0e0 !important;
-    z-index: 999 !important;
-    padding: 0.75rem 0.5rem !important;
-    box-shadow: -2px 0 8px rgba(0,0,0,0.06) !important;
-}}
-div[data-testid="stHorizontalBlock"]:has(#chatbot-col) {{
-    padding-right: {content_mr} !important;
-}}
-</style>""",
-        unsafe_allow_html=True,
+    """Cache data context in session_state so popover can access it."""
+    st.session_state["_chatbot_context"] = _build_data_context(
+        pl_df, margin_df, salary_df, overhead_df, months
     )
-
-    btn_label = "◀" if st.session_state.chatbot_open else "▶"
-    btn_help = "Свернуть" if st.session_state.chatbot_open else "Развернуть ИИ-аналитик"
-    if st.button(btn_label, key="chat_toggle_btn", help=btn_help):
-        st.session_state.chatbot_open = not st.session_state.chatbot_open
-        st.rerun()
-
-    if not st.session_state.chatbot_open:
-        return
-
-    st.markdown("### 🤖 ИИ-аналитик")
-    st.caption("Задайте вопрос по данным")
-
-    # История сообщений
-    with st.container(height=380):
-        if not st.session_state.chat_history:
-            st.caption("Примеры вопросов:")
-            st.caption("• Выручка за последний месяц?")
-            st.caption("• Топ клиентов по марже?")
-            st.caption("• Как изменился EBIT?")
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-    # Форма ввода — работает внутри колонки
-    with st.form(key="chat_form", clear_on_submit=True):
-        user_input = st.text_input(
-            "", placeholder="Введите вопрос...", label_visibility="collapsed"
-        )
-        submitted = st.form_submit_button("Отправить →", use_container_width=True)
-
-    if submitted and user_input.strip():
-        st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
-        context = _build_data_context(pl_df, margin_df, salary_df, overhead_df, months)
-        answer = _ask_claude(user_input.strip(), context, st.session_state.chat_history[:-1])
-        st.session_state.chat_history.append({"role": "assistant", "content": answer})
-        st.rerun()
-
-    if st.session_state.chat_history:
-        if st.button("🗑 Очистить чат", key="chat_clear_btn", use_container_width=True):
-            st.session_state.chat_history = []
-            st.rerun()

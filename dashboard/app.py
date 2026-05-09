@@ -158,6 +158,9 @@ with st.sidebar:
         st.rerun()
     st.divider()
     st.caption("🔍 Сверка данных — см. ниже после загрузки")
+    st.divider()
+    from dashboard.components.chatbot import render_chatbot_popover
+    render_chatbot_popover()
 
 
 if load_error:
@@ -191,6 +194,10 @@ project_df = build_project_pl(
 
 forecast_df = build_forecast(pl_df)
 
+# Pre-build chatbot data context (sidebar popover reads from session_state)
+from dashboard.components.chatbot import prepare_chatbot_context
+prepare_chatbot_context(pl_df, margin_filtered, salary_filtered, overhead_df, months)
+
 # ── Data validation (shown in sidebar) ───────────────────────────────────────
 from dashboard.components.data_validator import validate_data as _validate
 _validation = _validate(margin_filtered, salary_filtered, overhead_df, pl_df)
@@ -214,27 +221,20 @@ with st.sidebar:
             else:
                 st.caption(f"✅ {r['msg']}")
 
-# ── Render view + AI Chatbot (fixed right panel) ─────────────────────────────
-from dashboard.components.chatbot import render_chatbot
-main_col, chat_col = st.columns([3, 1], gap="medium")
+# ── Render view (full width) ─────────────────────────────────────────────────
+if "Собственник" in view:
+    from dashboard.views.owner import render
+    refunds_filtered = (refunds_df[refunds_df["month"].isin(months)]
+                        if not refunds_df.empty else refunds_df)
+    render(pl_df, overhead_df, margin_df=margin_filtered, salary_df=salary_filtered,
+           months=months, overhead_calc=overhead_calc, refunds_df=refunds_filtered)
 
-with main_col:
-    if "Собственник" in view:
-        from dashboard.views.owner import render
-        refunds_filtered = (refunds_df[refunds_df["month"].isin(months)]
-                            if not refunds_df.empty else refunds_df)
-        render(pl_df, overhead_df, margin_df=margin_filtered, salary_df=salary_filtered,
-               months=months, overhead_calc=overhead_calc, refunds_df=refunds_filtered)
+elif "Руководитель" in view:
+    from dashboard.views.director import render
+    render(project_df, pl_df, months, salary_df=salary_filtered,
+           fot_scenario=fot_scenario)
 
-    elif "Руководитель" in view:
-        from dashboard.views.director import render
-        render(project_df, pl_df, months, salary_df=salary_filtered,
-               fot_scenario=fot_scenario)
-
-    else:
-        from dashboard.views.operational import render
-        render(pl_df, project_df, overhead_df, salary_filtered, forecast_df,
-               fot_scenario=fot_scenario)
-
-with chat_col:
-    render_chatbot(pl_df, margin_filtered, salary_filtered, overhead_df, months)
+else:
+    from dashboard.views.operational import render
+    render(pl_df, project_df, overhead_df, salary_filtered, forecast_df,
+           fot_scenario=fot_scenario)
